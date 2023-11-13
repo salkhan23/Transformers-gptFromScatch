@@ -10,6 +10,7 @@
 
 import torch
 import numpy as np
+import models
 
 
 def main():
@@ -93,8 +94,8 @@ def main():
     batch_size = 4
 
     def get_batch(batch_s, blk_s, data_type='train'):
-        x_batch = torch.zeros(batch_s, blk_s)
-        y_batch = torch.zeros(batch_s, blk_s)
+        x_batch = torch.zeros(batch_s, blk_s, dtype=torch.long)
+        y_batch = torch.zeros(batch_s, blk_s, dtype=torch.long)
 
         if data_type.lower() == 'train':
             b_data = train_data
@@ -117,21 +118,31 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     n_iters = n_train // batch_size
+    net = models.BigramLanguageModel(vocab_size)
 
-    for b_idx in range(n_iters):
-        bx, by = get_batch(batch_size, block_size, 'train')
-        print("Processing batch {}".format(b_idx))
+    # for b_idx in range(n_iters):
+    #     bx, by = get_batch(batch_size, block_size, 'train')
+    #     print("Processing batch {}".format(b_idx))
+    #
+    #     # # Each batch consists of block_size (8) input samples
+    #     # # to iterative over each input individually, use the time index
+    #     # for t_idx in range(block_size):
+    #     #     b_context = bx[:, :t_idx + 1]  # [bxt_idx]
+    #     #     b_label = by[:, t_idx]   # [bx1]
+    #     #
+    #     #     loss, embeddings = net(bx, by)
+    #
+    #     loss, embeddings = net(bx, by)
+    #
+    #     import pdb
+    #     pdb.set_trace()
 
-        for t_idx in range(block_size):
-            b_context = bx[:, :t_idx+1]
-            b_label = by[:, t_idx]
-
-            print("input: {}".format(b_context))
-            print("label: {}".format(b_label))
-
-            import pdb
-            pdb.set_trace()
-
+    # Generate Code from the model
+    starting_encoding = torch.zeros((1, 1), dtype=torch.long)  # [1x1]
+    predicted_next_indices = net.generate(starting_encoding, max_new_tokens=100)  # [b, max_new_tokens]
+    predicted_next_indices = predicted_next_indices.squeeze()  # get rid of the batch dim
+    generated_text = decode(predicted_next_indices.numpy())
+    print("Generated Text\n{}".format(generated_text))
     import pdb
     pdb.set_trace()
 
