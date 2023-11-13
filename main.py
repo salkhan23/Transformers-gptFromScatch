@@ -10,7 +10,7 @@
 
 import torch
 import numpy as np
-import models
+import bigramLanguageModel
 
 
 def main():
@@ -118,7 +118,7 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     n_iters = n_train // batch_size
-    net = models.BigramLanguageModel(vocab_size)
+    net = bigramLanguageModel.BigramLanguageModel(vocab_size)
 
     # for b_idx in range(n_iters):
     #     bx, by = get_batch(batch_size, block_size, 'train')
