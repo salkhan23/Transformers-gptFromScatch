@@ -12,6 +12,9 @@ import torch
 import numpy as np
 import bigramLanguageModel
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print("Using {} device".format(device))
+
 
 def generate_data_from_model(m, n_tokens):
     """
@@ -20,7 +23,7 @@ def generate_data_from_model(m, n_tokens):
     :param n_tokens:
     :return:  sequence of generated embeddings
     """
-    starting_encoding = torch.zeros((1, 1), dtype=torch.long)  # [1(b)x1(t)], one word
+    starting_encoding = torch.zeros((1, 1), dtype=torch.long).to(device)  # [1(b)x1(t)], one word
     predicted_next_indices = \
         m.generate(starting_encoding, max_new_tokens=n_tokens)  # [b, max_new_tokens]
 
@@ -31,18 +34,28 @@ def generate_data_from_model(m, n_tokens):
 
 def main():
 
+    # -----------------------------------------------------------------------------------
+    # Model variables
+    # -----------------------------------------------------------------------------------
+    block_size = 8  # context size
+    batch_size = 32
+    n_iters = 10000
+    lr = 1e-3
+    eval_interval = 300
+    eval_iters = 200
+
+    # -----------------------------------------------------------------------------------
+    # Data Access
+    # -----------------------------------------------------------------------------------
     # Read in the tiny Shakespeare Dataset.
     with open("../../data/tinyShakespeare/input.txt") as f:
         text = f.read()  # text is a string object
-    print("Length of Dataset {}".format(len(text)))
+    print(" Number of data points in Dataset {}".format(len(text)))
 
-    # -----------------------------------------------------------------------------------
-    # Set up a tokenizer (convert a string to embeddings)
-    # We use character-level tokens
-    #
-    # Multiple other forms exist
-    # Ref: https://towardsdatascience.com/top-5-word-tokenizers-that-every-nlp-data-scientist-should-know-45cc31f8e8b9
-    # NLTK is a commonly used package for natural language processing applications.
+    # Set up a tokenizer (convert words/characters to embedding indexes)
+    # We use character-level tokens. Multiple other forms exist:
+    # * Ref: https://towardsdatascience.com/top-5-word-tokenizers-that-every-nlp-data-scientist-should-know-45cc31f8e8b9
+    # * NLTK is a commonly used package for natural language processing applications.
     # The nltk.tokenize module offers several options for tokenizers.
     # google uses: https://github.com/google/sentencepiece
     # openai (GPT) uses: https://github.com/openai/tiktoken: a byte pair encoding scheme
@@ -62,12 +75,8 @@ def main():
 
     def decode(int_arr):
         return ''.join(itoc[i] for i in int_arr)
-    # encode = lambda string: [ctoi[c] for c in string]
-    # decode = lambda int_arr: ''.join(itoc[i] for i in int_arr)
 
-    # -----------------------------------------------------------------------------------
     # Tokenize all the text
-    # -----------------------------------------------------------------------------------
     data = encode(text)
     # Make tokenized inputs into pytorch tensors
     data = torch.tensor(data, dtype=torch.long)
@@ -84,47 +93,39 @@ def main():
     # -----------------------------------------------------------------------------------
     train_test_split = 0.9
     n_train = int(train_test_split * len(data))
-    # n_test = len(data) - n_train
 
     train_data = data[:n_train]
     val_data = data[n_train:]
 
-    # -----------------------------------------------------------------------------------
-    # Set up data loaders for inputs to the model
-    # -----------------------------------------------------------------------------------
-    block_size = 8
-
+    # DEBUG: Iterating over a block of Data
     x = train_data[:block_size]
     y = train_data[1:block_size + 1]
-
     # [1] Task is to predict the next data.
     # note that in each block size, there are 8 example trainings
     for i in range(block_size):
         print("{}: Train {} --> Label {}".format(i, x[:i+1], y[i]))
-    # x[:i+1] characters upto i and including i
-
+    # x[:i+1] characters up to i and including i
     # note that seeing the data this way also has the advantage that the model sees inputs of
-    # lengths up to the context length, not just the condext length.
+    # lengths up to the context length, not just the context length.
 
     # [2] Setup multi batch inputs to speed up compute time
-    batch_size = 8
-
     def get_batch(batch_s, blk_s, data_type='train'):
+        b_data = train_data if data_type.lower == 'train' else val_data
+
         x_batch = torch.zeros(batch_s, blk_s, dtype=torch.long)
         y_batch = torch.zeros(batch_s, blk_s, dtype=torch.long)
-
-        if data_type.lower() == 'train':
-            b_data = train_data
-        else:
-            b_data = val_data
 
         start_idx = np.random.randint(len(b_data) - blk_s, size=batch_s)
         for b_idx in range(batch_s):
             x_batch[b_idx, :] = b_data[start_idx[b_idx]: start_idx[b_idx] + blk_s]
             y_batch[b_idx] = b_data[start_idx[b_idx] + 1: start_idx[b_idx] + blk_s + 1]
 
+        x_batch = x_batch.to(device)
+        y_batch = y_batch.to(device)
+
         return x_batch, y_batch
 
+    # DEBUG: test get_batch function
     xb,  yb = get_batch(batch_size, block_size, 'train')
     print("Input Data [Size {}]\n{}".format(xb.shape, xb))
     print("Label [Size {}]\n{}".format(yb.shape, yb))
@@ -134,23 +135,19 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     net = bigramLanguageModel.BigramLanguageModel(vocab_size)
+    net = net.to(device)
 
-    # Generate Code from the untrained model
+    # DEBUG: Generate code from the untrained model
     generated_embeddings = generate_data_from_model(net, 100)
-    generated_text = decode(generated_embeddings.numpy())
+    generated_text = decode(generated_embeddings.cpu().numpy())
     print("Generated Text\n{}".format(generated_text))
 
     # Start of Training
     # ---------------------------------------
     # Setup an optimizer
-    lr = 1e-3
     optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
 
-    batch_size = 32
-    n_iters = 10000
-
     optimizer.zero_grad(set_to_none=True)
-
     for n_idx in range(n_iters):
         bx, by = get_batch(batch_size, block_size, 'train')
 
@@ -163,9 +160,8 @@ def main():
 
     # Generate Code from the trained model
     generated_embeddings = generate_data_from_model(net, 300)
-    generated_text = decode(generated_embeddings.numpy())
+    generated_text = decode(generated_embeddings.cpu().numpy())
     print("Generated Text\n{}".format(generated_text))
-
 
     import pdb
     pdb.set_trace()
