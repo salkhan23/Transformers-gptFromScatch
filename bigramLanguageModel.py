@@ -33,7 +33,7 @@ class BigramLanguageModel(nn.Module):
 
         :param indices:  [b, t]; b = num batches, t = num time steps ()
         :param targets: [b, t]; for each input, what is the exected output. (word indcies)
-        :return:
+        :return: embeddings, loss1
         """
 
         # For each input index, replace it with its word embedding
@@ -97,19 +97,23 @@ if __name__ == "__main__":
         "Noor": 0,
         "you": 1,
         "want": 2,
-        "build": 3,
-        "a": 4,
-        "?": 5
+        "to": 3,
+        "build": 4,
+        "a": 5,
+        "?": 6
     }
     vocab_size = len(word_to_idx)
 
     model = BigramLanguageModel(vocab_size)
 
-    input1 = torch.tensor([5, 0], dtype=torch.long)
+    input1 = torch.tensor([5, 1, 1, 0], dtype=torch.long)
     input1 = torch.unsqueeze(input1, dim=0)  # add the batch dimension
-    output = torch.tensor([0, 2], dtype=torch.long)
 
-    loss, logits = model(input1, torch.tensor([0, 2], dtype=torch.long))
+    logits, loss = model(input1)
 
-    print("Loss {}".format(loss))
+    # print("Loss {}".format(loss))
+    print("Embeddings\n{}".format(logits))
     print("logits.shape {}".format(logits.shape))
+
+    import pdb
+    pdb.set_trace()
