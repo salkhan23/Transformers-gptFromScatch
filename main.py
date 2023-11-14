@@ -13,6 +13,22 @@ import numpy as np
 import bigramLanguageModel
 
 
+def generate_data_from_model(m, n_tokens):
+    """
+    Generate n_tokens from a model
+    :param m:
+    :param n_tokens:
+    :return:  sequence of generated embeddings
+    """
+    starting_encoding = torch.zeros((1, 1), dtype=torch.long)  # [1(b)x1(t)], one word
+    predicted_next_indices = \
+        m.generate(starting_encoding, max_new_tokens=n_tokens)  # [b, max_new_tokens]
+
+    predicted_next_indices = predicted_next_indices.squeeze()  # remove batch dim
+
+    return predicted_next_indices
+
+
 def main():
 
     # Read in the tiny Shakespeare Dataset.
@@ -91,7 +107,7 @@ def main():
     # lengths up to the context length, not just the condext length.
 
     # [2] Setup multi batch inputs to speed up compute time
-    batch_size = 4
+    batch_size = 8
 
     def get_batch(batch_s, blk_s, data_type='train'):
         x_batch = torch.zeros(batch_s, blk_s, dtype=torch.long)
@@ -102,7 +118,7 @@ def main():
         else:
             b_data = val_data
 
-        start_idx = np.random.randint(len(b_data) - blk_s, size=4)
+        start_idx = np.random.randint(len(b_data) - blk_s, size=batch_s)
         for b_idx in range(batch_s):
             x_batch[b_idx, :] = b_data[start_idx[b_idx]: start_idx[b_idx] + blk_s]
             y_batch[b_idx] = b_data[start_idx[b_idx] + 1: start_idx[b_idx] + blk_s + 1]
@@ -117,32 +133,40 @@ def main():
     # -------------------------------------------------------------------------------------
     # training
     # -------------------------------------------------------------------------------------
-    n_iters = n_train // batch_size
     net = bigramLanguageModel.BigramLanguageModel(vocab_size)
 
-    # for b_idx in range(n_iters):
-    #     bx, by = get_batch(batch_size, block_size, 'train')
-    #     print("Processing batch {}".format(b_idx))
-    #
-    #     # # Each batch consists of block_size (8) input samples
-    #     # # to iterative over each input individually, use the time index
-    #     # for t_idx in range(block_size):
-    #     #     b_context = bx[:, :t_idx + 1]  # [bxt_idx]
-    #     #     b_label = by[:, t_idx]   # [bx1]
-    #     #
-    #     #     loss, embeddings = net(bx, by)
-    #
-    #     loss, embeddings = net(bx, by)
-    #
-    #     import pdb
-    #     pdb.set_trace()
-
-    # Generate Code from the model
-    starting_encoding = torch.zeros((1, 1), dtype=torch.long)  # [1x1]
-    predicted_next_indices = net.generate(starting_encoding, max_new_tokens=100)  # [b, max_new_tokens]
-    predicted_next_indices = predicted_next_indices.squeeze()  # get rid of the batch dim
-    generated_text = decode(predicted_next_indices.numpy())
+    # Generate Code from the untrained model
+    generated_embeddings = generate_data_from_model(net, 100)
+    generated_text = decode(generated_embeddings.numpy())
     print("Generated Text\n{}".format(generated_text))
+
+    # Start of Training
+    # ---------------------------------------
+    # Setup an optimizer
+    lr = 1e-3
+    optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
+
+    batch_size = 32
+    n_iters = 10000
+
+    optimizer.zero_grad(set_to_none=True)
+
+    for n_idx in range(n_iters):
+        bx, by = get_batch(batch_size, block_size, 'train')
+
+        logits, loss = net(bx, by)
+        loss.backward()
+        optimizer.step()
+
+        if n_idx % 1000 == 0:
+            print("Iteration {}. Loss: {}".format(n_idx, loss.item()))
+
+    # Generate Code from the trained model
+    generated_embeddings = generate_data_from_model(net, 300)
+    generated_text = decode(generated_embeddings.numpy())
+    print("Generated Text\n{}".format(generated_text))
+
+
     import pdb
     pdb.set_trace()
 
