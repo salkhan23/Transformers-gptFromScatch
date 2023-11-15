@@ -63,7 +63,7 @@ def main():
     # Get the set of all characters
     characters = sorted(list(set(text)))
     vocab_size = len(characters)
-    print("Text contains {} characters:{}".format(vocab_size, ''.join(characters)))
+    print("Datatset contains {} characters:{}".format(vocab_size, ''.join(characters)))
 
     # Create numerical representation of characters
     ctoi = {c: i for i, c in enumerate(characters)}
@@ -81,12 +81,12 @@ def main():
     # Make tokenized inputs into pytorch tensors
     data = torch.tensor(data, dtype=torch.long)
 
-    # Verify everything is working
-    sample_encoded_data = data[:100]
-    print("Sample data: {}".format(text[:100]))
-    print("Sample encoded date:\n{}".format(sample_encoded_data))
-    print("Sample data dtype {}".format(sample_encoded_data.dtype))
-    print("Sample decoded data {}".format(decode(sample_encoded_data.numpy())))
+    # # DEBIG: Verify everything is working
+    # sample_encoded_data = data[:100]
+    # print("Sample data: {}".format(text[:100]))
+    # print("Sample encoded date:\n{}".format(sample_encoded_data))
+    # print("Sample data dtype {}".format(sample_encoded_data.dtype))
+    # print("Sample decoded data {}".format(decode(sample_encoded_data.numpy())))
 
     # -----------------------------------------------------------------------------------
     # Set up train and test dataset
@@ -97,16 +97,16 @@ def main():
     train_data = data[:n_train]
     val_data = data[n_train:]
 
-    # DEBUG: Iterating over a block of Data
-    x = train_data[:block_size]
-    y = train_data[1:block_size + 1]
-    # [1] Task is to predict the next data.
-    # note that in each block size, there are 8 example trainings
-    for i in range(block_size):
-        print("{}: Train {} --> Label {}".format(i, x[:i+1], y[i]))
-    # x[:i+1] characters up to i and including i
-    # note that seeing the data this way also has the advantage that the model sees inputs of
-    # lengths up to the context length, not just the context length.
+    # # DEBUG: Iterating over a block of Data
+    # x = train_data[:block_size]
+    # y = train_data[1:block_size + 1]
+    # # [1] Task is to predict the next data.
+    # # note that in each block size, there are 8 example trainings
+    # for i in range(block_size):
+    #     print("{}: Train {} --> Label {}".format(i, x[:i+1], y[i]))
+    # # x[:i+1] characters up to i and including i
+    # # note that seeing the data this way also has the advantage that the model sees inputs of
+    # # lengths up to the context length, not just the context length.
 
     # [2] Setup multi batch inputs to speed up compute time
     def get_batch(batch_s, blk_s, data_type='train'):
@@ -125,11 +125,25 @@ def main():
 
         return x_batch, y_batch
 
-    # DEBUG: test get_batch function
-    xb,  yb = get_batch(batch_size, block_size, 'train')
-    print("Input Data [Size {}]\n{}".format(xb.shape, xb))
-    print("Label [Size {}]\n{}".format(yb.shape, yb))
-    print("-"*80)
+    # # DEBUG: test get_batch function
+    # xb,  yb = get_batch(batch_size, block_size, 'train')
+    # print("Input Data [Size {}]\n{}".format(xb.shape, xb))
+    # print("Label [Size {}]\n{}".format(yb.shape, yb))
+    # print("-"*80)
+
+    @torch.no_grad()
+    def estimate_loss(model,):
+        model.eval()
+        out = {}
+        for split in ['val', 'train']:
+            losses1 = torch.zeros(eval_iters)
+            for e_idx in range(eval_iters):
+                x1, y1 = get_batch(batch_size, block_size, split)
+                logits1, loss1 = model(x1, y1)
+                losses1[e_idx] = loss1.item()
+            out[split] = losses1.mean()
+        model.train()
+        return out
 
     # -------------------------------------------------------------------------------------
     # training
@@ -137,10 +151,10 @@ def main():
     net = bigramLanguageModel.BigramLanguageModel(vocab_size)
     net = net.to(device)
 
-    # DEBUG: Generate code from the untrained model
-    generated_embeddings = generate_data_from_model(net, 100)
-    generated_text = decode(generated_embeddings.cpu().numpy())
-    print("Generated Text\n{}".format(generated_text))
+    # # DEBUG: Generate code from the untrained model
+    # generated_embeddings = generate_data_from_model(net, 100)
+    # generated_text = decode(generated_embeddings.cpu().numpy())
+    # print("Pretraining Generated Text\n{}".format(generated_text))
 
     # Start of Training
     # ---------------------------------------
@@ -151,17 +165,20 @@ def main():
     for n_idx in range(n_iters):
         bx, by = get_batch(batch_size, block_size, 'train')
 
+        # Estimate the loss
         logits, loss = net(bx, by)
         loss.backward()
         optimizer.step()
 
-        if n_idx % 1000 == 0:
-            print("Iteration {}. Loss: {}".format(n_idx, loss.item()))
+        # evaluate the mode
+        if (n_idx % eval_interval) == 0:
+            losses = estimate_loss(net)
+            print("{:4} train loss {:0.4f}, val loss {:0.4f}".format(n_idx, losses['train'], losses['val']))
 
     # Generate Code from the trained model
     generated_embeddings = generate_data_from_model(net, 300)
     generated_text = decode(generated_embeddings.cpu().numpy())
-    print("Generated Text\n{}".format(generated_text))
+    print("Post Training Generated Text\n{}".format(generated_text))
 
     import pdb
     pdb.set_trace()
