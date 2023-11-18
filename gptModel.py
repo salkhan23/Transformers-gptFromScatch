@@ -29,12 +29,13 @@ class GptModel(nn.Module):
 
         :return:
         """
-        x = self.embedding_table(x_in)  # x = [B,T, ch] CH = embed_dim
-        logits1 = self.linear(x)
-        b, t, ch = x.shape
+        x = self.embedding_table(x_in)  # [B,T, embed_dim]
+        logits1 = self.linear(x)        # [B,T, vocab_s]
+        b, t, ch = logits1.shape  # ch = vocab_s
 
         loss1 = None
         if y_in is not None:
+
             logits_a = logits1.reshape(b*t, ch)  # [b*t, ch]
             y_in = y_in.reshape(b*t)
             # cross entropy loss expects input in the format (..., ch, ...)
@@ -42,12 +43,15 @@ class GptModel(nn.Module):
 
         return logits1, loss1
 
-    def generate(self, x_in, max_new_indices):
+    def generate(self, x_in, max_new_tokens):
 
-        for idx in range(max_new_indices):
+        for idx in range(max_new_tokens):
             # Get the predictions
             logits1, _ = self(x_in)  # calls forward function, (nn.module)
-            # logits = [b, t, c]
+            # logits1 = [b, t, c]
+
+            # Focus on the last time step
+            logits1 = logits1[:, -1, :]  # [b, t, c] --> [b, c]. Note that when this function is used b == 1
 
             # get probabilities from logits
             probs = F.softmax(logits1, dim=1)  # softmax across the channel dimension, [b,1]
@@ -57,6 +61,8 @@ class GptModel(nn.Module):
 
             # Append sampled index to the running index sequence
             x_in = torch.cat((x_in, idx_next), dim=1)  # [b, t+1]
+
+        return x_in
 
 
 if __name__ == "__main__":
@@ -73,7 +79,7 @@ if __name__ == "__main__":
     }
     vocab_size = len(word_to_idx)
 
-    model = GptModel(vocab_s=vocab_size, embed_dim=32)
+    model = GptModel(vocab_s=vocab_size, embed_dim=256)
 
     input1 = torch.tensor([5, 1, 1, 0], dtype=torch.long)
     input1 = torch.unsqueeze(input1, dim=0)  # add the batch dimension

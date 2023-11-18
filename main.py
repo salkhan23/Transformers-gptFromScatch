@@ -11,6 +11,7 @@
 import torch
 import numpy as np
 import bigramLanguageModel
+import gptModel
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("Using {} device".format(device))
@@ -40,9 +41,10 @@ def main():
     block_size = 8  # context size
     batch_size = 32
     n_iters = 10000
-    lr = 1e-3
+    lr = 1e-4
     eval_interval = 300
     eval_iters = 200
+    embed_dim = 30
 
     # -----------------------------------------------------------------------------------
     # Data Access
@@ -148,7 +150,8 @@ def main():
     # -------------------------------------------------------------------------------------
     # training
     # -------------------------------------------------------------------------------------
-    net = bigramLanguageModel.BigramLanguageModel(vocab_size)
+    # net = bigramLanguageModel.BigramLanguageModel(vocab_size)
+    net = gptModel.GptModel(vocab_size, embed_dim=embed_dim)
     net = net.to(device)
 
     # # DEBUG: Generate code from the untrained model
