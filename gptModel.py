@@ -57,18 +57,20 @@ class GptModel(nn.Module):
 
         self.vocab_s = vocab_s
 
-        # Declare the layers
+        # Declare the layers  ----------------------------------------------------------------
+
+        # Word/ Symbol Embeddings
         self.embedding_table = nn.Embedding(num_embeddings=vocab_s, embedding_dim=embed_dim)
-        # self.embedding_table.weight = [vocab_s, embed_dim] mat. Each Row is a seperate vocab word
+        # self.embedding_table.weight = [vocab_s, embed_dim] mat. Each Row is a separate vocab word
 
         # positional embeddings
         self.pos_embeddings = nn.Embedding(num_embeddings=block_s, embedding_dim=embed_dim)
-
         # Used fixed positional embeddings
         pos_embed_table = get_positional_embeddings_matrix(block_s, embed_dim)
         self.pos_embeddings.weight.requires_grad = False
         self.pos_embeddings.weight.copy_(pos_embed_table)
 
+        # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
 
     def forward(self, x_in, y_in=None):
