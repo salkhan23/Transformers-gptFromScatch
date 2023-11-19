@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 def get_positional_embeddings_matrix(max_pos, embed_dim):
     """
-    Returns a [max_pos, embed] matrix of positional embeddings
+    Returns a [max_pos, embed] matrix of positional embeddings.
 
     :param max_pos:
     :param embed_dim:
@@ -22,6 +22,28 @@ def get_positional_embeddings_matrix(max_pos, embed_dim):
             mat[pos, 2*i+1] = torch.cos(torch.tensor(pos/10000**(2*i/embed_dim)))
 
     return mat
+
+
+def print_model_parameters(m):
+    """
+    Print Model Parameters, their size and whether they are trainable or not
+    :param m:
+    :return:
+    """
+    print("{}\nModel Details\n{}".format('-' * 90, '-' * 90))
+
+    n_train_p = 0
+    n_fixed_p = 0
+
+    for name, param in m.named_parameters():
+        print("Parameter: {}, size {}, Trainable {}".format(name, param.shape, param.requires_grad))
+
+        if param.requires_grad:
+            n_train_p += torch.numel(param)
+        else:
+            n_fixed_p += torch.numel(param)
+
+    print("\nTotal Number of Parameters {}, Trainable {}, Fixed {}".format(n_train_p + n_fixed_p, n_train_p, n_fixed_p))
 
 
 class GptModel(nn.Module):
@@ -118,6 +140,9 @@ if __name__ == "__main__":
     # print("Loss {}".format(loss))
     print("Embeddings\n{}".format(logits))
     print("logits.shape {}".format(logits.shape))
+
+    print_model_parameters(model)
+
 
     import pdb
     pdb.set_trace()
