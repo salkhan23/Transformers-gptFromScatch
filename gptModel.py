@@ -6,8 +6,26 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def get_positional_embeddings_matrix(max_pos, embed_dim):
+    """
+    Returns a [max_pos, embed] matrix of positional embeddings
+
+    :param max_pos:
+    :param embed_dim:
+    :return:
+    """
+    mat = torch.zeros((max_pos, embed_dim), dtype=torch.float64)
+
+    for pos in range(max_pos):
+        for i in range(embed_dim // 2):
+            mat[pos, 2*i] = torch.sin(torch.tensor(pos/10000**(2*i/embed_dim)))
+            mat[pos, 2*i+1] = torch.cos(torch.tensor(pos/10000**(2*i/embed_dim)))
+
+    return mat
+
+
 class GptModel(nn.Module):
-    def __init__(self, vocab_s, embed_dim):
+    def __init__(self, vocab_s, embed_dim, block_s):
         """
 
         :param vocab_s:
@@ -19,6 +37,16 @@ class GptModel(nn.Module):
 
         # Declare the layers
         self.embedding_table = nn.Embedding(num_embeddings=vocab_s, embedding_dim=embed_dim)
+        # self.embedding_table.weight = [vocab_s, embed_dim] mat. Each Row is a seperate vocab word
+
+        # positional embeddings
+        self.pos_embeddings = nn.Embedding(num_embeddings=block_s, embedding_dim=embed_dim)
+
+        # Used fixed positional embeddings
+        pos_embed_table = get_positional_embeddings_matrix(block_s, embed_dim)
+        self.pos_embeddings.weight.requires_grad = False
+        self.pos_embeddings.weight.copy_(pos_embed_table)
+
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
 
     def forward(self, x_in, y_in=None):
@@ -78,8 +106,9 @@ if __name__ == "__main__":
         "?": 6
     }
     vocab_size = len(word_to_idx)
+    block_size = 8  # context window length
 
-    model = GptModel(vocab_s=vocab_size, embed_dim=256)
+    model = GptModel(vocab_s=vocab_size, embed_dim=256, block_s=block_size)
 
     input1 = torch.tensor([5, 1, 1, 0], dtype=torch.long)
     input1 = torch.unsqueeze(input1, dim=0)  # add the batch dimension
