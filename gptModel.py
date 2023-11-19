@@ -91,11 +91,13 @@ class GptModel(nn.Module):
         """
         b, t = x_in.shape
 
-        x = self.embedding_table(x_in)  # [B,T, embed_dim]
+        token_emb = self.embedding_table(x_in)  # [B,T, embed_dim]
+        pos_emb = self.pos_embeddings(self.pos_v[:t])  # [t, embed_dim]
 
-        pos_m = self.pos_v[:t].repeat(b, 1)  # repeat b times in the batch dimension.
-        x += self.pos_embeddings(pos_m)  # Add positional embeddings
-
+        # Add position and token embedding.
+        # Broadcasting handles the extension to the batch dim.
+        # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
+        x = token_emb + pos_emb
         logits1 = self.linear(x)  # [B,T, vocab_s]
 
         loss1 = None
