@@ -56,6 +56,8 @@ class GptModel(nn.Module):
         super().__init__()
 
         self.vocab_s = vocab_s
+        self.embed_dim = embed_dim
+        self.block_s = block_s
 
         # Declare the layers  ----------------------------------------------------------------
 
@@ -70,25 +72,36 @@ class GptModel(nn.Module):
         self.pos_embeddings.weight.requires_grad = False
         self.pos_embeddings.weight.copy_(pos_embed_table)
 
+        # IMP: PyTorch does not like creation of new variables in the forward function. Cannot move them to
+        # device. Their add device type as an input parameter, or declare the variable here, so it is correctly
+        # moved to the device in the forward function. Register buffer, tells pytorch, this is a variable
+        # whose gradient does not need to be tracked.
+        self.register_buffer('pos_v', torch.arange(block_s))
+
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
 
     def forward(self, x_in, y_in=None):
         """
 
-        :param x_in: [B,T]  [Batch, time] matrix of input embeddings indexes
+        :param x_in: [B, T]  [Batch, time] matrix of input embeddings indexes
         :param y_in: [B,T], [Batch, time] matrix of output embeddings indexes
 
         :return:
         """
+        b, t = x_in.shape
+
         x = self.embedding_table(x_in)  # [B,T, embed_dim]
-        logits1 = self.linear(x)        # [B,T, vocab_s]
-        b, t, ch = logits1.shape  # ch = vocab_s
+
+        pos_m = self.pos_v[:t].repeat(b, 1)  # repeat b times in the batch dimension.
+        x += self.pos_embeddings(pos_m)  # Add positional embeddings
+
+        logits1 = self.linear(x)  # [B,T, vocab_s]
 
         loss1 = None
         if y_in is not None:
 
-            logits_a = logits1.reshape(b*t, ch)  # [b*t, ch]
+            logits_a = logits1.reshape(b*t, self.vocab_s)  # [b*t, vocab_s]
             y_in = y_in.reshape(b*t)
             # cross entropy loss expects input in the format (..., ch, ...)
             loss1 = F.cross_entropy(logits_a, y_in)
@@ -99,8 +112,7 @@ class GptModel(nn.Module):
 
         for idx in range(max_new_tokens):
             # Get the predictions
-            logits1, _ = self(x_in)  # calls forward function, (nn.module)
-            # logits1 = [b, t, c]
+            logits1, _ = self(x_in[:, -self.block_s:])  # calls forward function, (nn.module). logits1 = [b, t, c]
 
             # Focus on the last time step
             logits1 = logits1[:, -1, :]  # [b, t, c] --> [b, c]. Note that when this function is used b == 1
@@ -144,7 +156,6 @@ if __name__ == "__main__":
     print("logits.shape {}".format(logits.shape))
 
     print_model_parameters(model)
-
 
     import pdb
     pdb.set_trace()

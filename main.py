@@ -151,7 +151,7 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     # net = bigramLanguageModel.BigramLanguageModel(vocab_size)
-    net = gptModel.GptModel(vocab_size, embed_dim=embed_dim)
+    net = gptModel.GptModel(vocab_size, embed_dim=embed_dim, block_s=block_size)
     net = net.to(device)
 
     # # DEBUG: Generate code from the untrained model
