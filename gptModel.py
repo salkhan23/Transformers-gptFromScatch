@@ -128,6 +128,7 @@ class GptModel(nn.Module):
         # attention  layer
         self.self_attention = \
             [AttentionSingleHead(embed_dim, head_dim=self.single_attn_head_dim) for head in range(n_attn_heads)]
+        self.layer_norm = nn.LayerNorm(embed_dim)
 
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
@@ -157,7 +158,10 @@ class GptModel(nn.Module):
         # Add the residual connection
         z = attended_x + x
 
-        logits1 = self.linear(z)  # [B,T, vocab_s]
+        # Layer normalization
+        r = self.layer_norm(z)
+
+        logits1 = self.linear(r)  # [B,T, vocab_s]
 
         loss1 = None
         if y_in is not None:
