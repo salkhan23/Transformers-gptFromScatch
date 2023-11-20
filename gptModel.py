@@ -71,7 +71,7 @@ class AttentionSingleHead(nn.Module):
         k = self.key(x_in)    # [B,T, head_dim]
         v = self.value(x_in)  # [B,T, head_dim]
 
-        # scaled_dot_product score
+        # scaled_dot_product score/attention
         s = q @ torch.transpose(k, 2, 1) / torch.sqrt(self.head_dim)
         # transpose [B,T,ch] -> [B,ch,T]
         # matrix multiply: [B, T, head_dim]*[B ,head_dim, T] = [B, T, T]
@@ -154,7 +154,10 @@ class GptModel(nn.Module):
         for h_idx, attn_head in enumerate(self.self_attention):
             attended_x[:, :, h_idx*self.single_attn_head_dim:(h_idx+1)*self.single_attn_head_dim] = attn_head(x)
 
-        logits1 = self.linear(attended_x)  # [B,T, vocab_s]
+        # Add the residual connection
+        z = attended_x + x
+
+        logits1 = self.linear(z)  # [B,T, vocab_s]
 
         loss1 = None
         if y_in is not None:
