@@ -46,6 +46,45 @@ def print_model_parameters(m):
     print("\nTotal Number of Parameters {}, Trainable {}, Fixed {}".format(n_train_p + n_fixed_p, n_train_p, n_fixed_p))
 
 
+class AttentionSingleHead(nn.Module):
+    def __init__(self, embed_dim, head_dim):
+        """
+        :param embed_dim: input data  dimension
+        :param head_dim: output data dimension (or internal dimensionality)
+        """
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.head_dim = head_dim
+
+        # Define the layers
+        self.query = nn.Linear(embed_dim, head_dim, bias=False)
+        self.key = nn.Linear(embed_dim, head_dim, bias=False)
+        self.value = nn.Linear(embed_dim, head_dim, bias=False)
+
+    def forward(self, x_in):
+        """
+        :param x_in: [B,T, ch]  ch = embed_dim
+        :return: y: [B, T, head_dim]
+        """
+
+        q = self.query(x_in)  # [B,T, head_dim]
+        k = self.key(x_in)    # [B,T, head_dim]
+        v = self.value(x_in)  # [B,T, head_dim]
+
+        # scaled_dot_product score
+        s = q @ torch.transpose(k, 2, 1) / torch.sqrt(self.head_dim)
+        # transpose [B,T,ch] -> [B,ch,T]
+        # matrix multiply: [B, T, head_dim]*[B ,head_dim, T] = [B, T, T]
+        a = F.softmax(s, dim=-1)  # [B, T, T]
+
+        y = a @ v  # [B,T,T] * [B,T,head_dim] = [B,T,head_dim]
+
+        # Note the difference between most notes and this implementation,
+        # due to PyTorch's different way of storing mats
+
+        return y
+
+
 class GptModel(nn.Module):
     def __init__(self, vocab_s, embed_dim, block_s):
         """
@@ -62,21 +101,23 @@ class GptModel(nn.Module):
         # Declare the layers  ----------------------------------------------------------------
 
         # Word/ Symbol Embeddings
-        self.embedding_table = nn.Embedding(num_embeddings=vocab_s, embedding_dim=embed_dim)
         # self.embedding_table.weight = [vocab_s, embed_dim] mat. Each Row is a separate vocab word
+        self.embedding_table = nn.Embedding(num_embeddings=vocab_s, embedding_dim=embed_dim)
 
-        # positional embeddings
+        # Positional embeddings
         self.pos_embeddings = nn.Embedding(num_embeddings=block_s, embedding_dim=embed_dim)
         # Used fixed positional embeddings
         pos_embed_table = get_positional_embeddings_matrix(block_s, embed_dim)
         self.pos_embeddings.weight.requires_grad = False
         self.pos_embeddings.weight.copy_(pos_embed_table)
-
         # IMP: PyTorch does not like creation of new variables in the forward function. Cannot move them to
         # device. Their add device type as an input parameter, or declare the variable here, so it is correctly
         # moved to the device in the forward function. Register buffer, tells pytorch, this is a variable
         # whose gradient does not need to be tracked.
         self.register_buffer('pos_v', torch.arange(block_s))
+
+        # attention  layer
+        self.self_attention = AttentionSingleHead(embed_dim, head_dim=torch.tensor(16, dtype=torch.int))
 
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
@@ -98,6 +139,9 @@ class GptModel(nn.Module):
         # Broadcasting handles the extension to the batch dim.
         # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
         x = token_emb + pos_emb
+
+        z = self.self_attention(x)
+
         logits1 = self.linear(x)  # [B,T, vocab_s]
 
         loss1 = None
