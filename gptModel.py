@@ -86,7 +86,7 @@ class AttentionSingleHead(nn.Module):
 
 
 class GptModel(nn.Module):
-    def __init__(self, vocab_s, embed_dim, block_s):
+    def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads):
         """
 
         :param vocab_s:
@@ -97,6 +97,15 @@ class GptModel(nn.Module):
         self.vocab_s = vocab_s
         self.embed_dim = embed_dim
         self.block_s = block_s
+        self.n_attn_heads = n_attn_heads
+
+        # Checks on embedded_dim and num_attention_heads checks
+        if embed_dim % n_attn_heads != 0:
+            raise Exception(
+                "Embedded Dimensions ({}) should be perfectly divisible by num attention heads ({})".format(
+                    embed_dim, n_attn_heads))
+
+        self.single_attn_head_dim = torch.tensor(embed_dim / n_attn_heads, dtype=torch.int)
 
         # Declare the layers  ----------------------------------------------------------------
 
@@ -117,7 +126,8 @@ class GptModel(nn.Module):
         self.register_buffer('pos_v', torch.arange(block_s))
 
         # attention  layer
-        self.self_attention = AttentionSingleHead(embed_dim, head_dim=torch.tensor(16, dtype=torch.int))
+        self.self_attention = \
+            [AttentionSingleHead(embed_dim, head_dim=self.single_attn_head_dim) for head in range(n_attn_heads)]
 
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
@@ -138,11 +148,13 @@ class GptModel(nn.Module):
         # Add position and token embedding.
         # Broadcasting handles the extension to the batch dim.
         # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
-        x = token_emb + pos_emb
+        x = token_emb + pos_emb  # [B, T, embed_dim]
 
-        z = self.self_attention(x)
+        attended_x = torch.zeros_like(x)
+        for h_idx, attn_head in enumerate(self.self_attention):
+            attended_x[:, :, h_idx*self.single_attn_head_dim:(h_idx+1)*self.single_attn_head_dim] = attn_head(x)
 
-        logits1 = self.linear(x)  # [B,T, vocab_s]
+        logits1 = self.linear(attended_x)  # [B,T, vocab_s]
 
         loss1 = None
         if y_in is not None:
@@ -190,7 +202,7 @@ if __name__ == "__main__":
     vocab_size = len(word_to_idx)
     block_size = 8  # context window length
 
-    model = GptModel(vocab_s=vocab_size, embed_dim=256, block_s=block_size)
+    model = GptModel(vocab_s=vocab_size, embed_dim=32, block_s=block_size, n_attn_heads=8)
 
     input1 = torch.tensor([5, 1, 1, 0], dtype=torch.long)
     input1 = torch.unsqueeze(input1, dim=0)  # add the batch dimension
