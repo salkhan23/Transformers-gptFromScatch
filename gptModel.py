@@ -126,9 +126,8 @@ class GptModel(nn.Module):
         self.register_buffer('pos_v', torch.arange(block_s))
 
         # attention  layer
-        # self.self_attention = \
-        #     [AttentionSingleHead(embed_dim, head_dim=self.single_attn_head_dim) for head in range(n_attn_heads)]
-        self.self_attention = AttentionSingleHead(embed_dim, embed_dim)
+        self.self_attention = nn.ModuleList(
+            AttentionSingleHead(embed_dim, head_dim=self.single_attn_head_dim) for _ in range(n_attn_heads))
 
         self.layer_norm = nn.LayerNorm(embed_dim)
 
@@ -154,9 +153,8 @@ class GptModel(nn.Module):
         x = token_emb + pos_emb  # [B, T, embed_dim]
 
         attended_x = torch.zeros_like(x)
-        # for h_idx, attn_head in enumerate(self.self_attention):
-        #     attended_x[:, :, h_idx*self.single_attn_head_dim:(h_idx+1)*self.single_attn_head_dim] = attn_head(x)
-        attended_x = self.self_attention(x)
+        for h_idx, attn_head in enumerate(self.self_attention):
+            attended_x[:, :, h_idx*self.single_attn_head_dim:(h_idx+1)*self.single_attn_head_dim] = attn_head(x)
 
         # Add the residual connection
         z = attended_x + x
