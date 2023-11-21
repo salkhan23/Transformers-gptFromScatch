@@ -49,6 +49,7 @@ def print_model_parameters(m):
 class AttentionSingleHead(nn.Module):
     def __init__(self, embed_dim, head_dim):
         """
+        Single Attention head
         :param embed_dim: input data  dimension
         :param head_dim: output data dimension (or internal dimensionality)
         """
@@ -85,6 +86,39 @@ class AttentionSingleHead(nn.Module):
         return y
 
 
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, embed_dim, n_heads):
+        """
+        Multi-headed attention
+        :param embed_dim:
+        :param n_heads:
+        """
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
+
+        # Checks on embedded_dim and num_attention_heads checks
+        if embed_dim % n_heads != 0:
+            raise Exception(
+                "Embedded dimension ({}) should be perfectly divisible by num attention heads ({})".format(
+                    embed_dim, n_heads))
+
+        self.attn_head_dim = torch.tensor(embed_dim / n_heads, dtype=torch.int)
+
+        # Declare the layers
+        self.attention_layers = nn.ModuleList(
+            AttentionSingleHead(embed_dim, head_dim=self.attn_head_dim) for _ in range(n_heads))
+
+    def forward(self, x_in):
+        """
+
+        :param x_in:  [B,T, embed_dim]
+        :return:
+        """
+        y = torch.concat([attn_head(x_in) for attn_head in self.attention_layers], dim=2)  # concatenate on embed_dim
+        return y
+
+
 class GptModel(nn.Module):
     def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads):
         """
@@ -98,14 +132,6 @@ class GptModel(nn.Module):
         self.embed_dim = embed_dim
         self.block_s = block_s
         self.n_attn_heads = n_attn_heads
-
-        # Checks on embedded_dim and num_attention_heads checks
-        if embed_dim % n_attn_heads != 0:
-            raise Exception(
-                "Embedded Dimensions ({}) should be perfectly divisible by num attention heads ({})".format(
-                    embed_dim, n_attn_heads))
-
-        self.single_attn_head_dim = torch.tensor(embed_dim / n_attn_heads, dtype=torch.int)
 
         # Declare the layers  ----------------------------------------------------------------
 
@@ -125,9 +151,8 @@ class GptModel(nn.Module):
         # whose gradient does not need to be tracked.
         self.register_buffer('pos_v', torch.arange(block_s))
 
-        # attention  layer
-        self.self_attention = nn.ModuleList(
-            AttentionSingleHead(embed_dim, head_dim=self.single_attn_head_dim) for _ in range(n_attn_heads))
+        # Multi-headed attention layer
+        self.self_attention = MultiHeadedAttention(embed_dim, n_attn_heads)
 
         self.layer_norm = nn.LayerNorm(embed_dim)
 
@@ -152,9 +177,7 @@ class GptModel(nn.Module):
         # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
         x = token_emb + pos_emb  # [B, T, embed_dim]
 
-        attended_x = torch.zeros_like(x)
-        for h_idx, attn_head in enumerate(self.self_attention):
-            attended_x[:, :, h_idx*self.single_attn_head_dim:(h_idx+1)*self.single_attn_head_dim] = attn_head(x)
+        attended_x = self.self_attention(x)
 
         # Add the residual connection
         z = attended_x + x
