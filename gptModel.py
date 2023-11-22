@@ -47,15 +47,17 @@ def print_model_parameters(m):
 
 
 class AttentionSingleHead(nn.Module):
-    def __init__(self, embed_dim, head_dim):
+    def __init__(self, embed_dim, head_dim, masked=False):
         """
         Single Attention head
         :param embed_dim: input data  dimension
         :param head_dim: output data dimension (or internal dimensionality)
+        :param masked: (default = False). Where to use causal mask. @ each time step,  cannot use future values.
         """
         super().__init__()
         self.embed_dim = embed_dim
         self.head_dim = head_dim
+        self.masked=masked
 
         # Define the layers
         self.query = nn.Linear(embed_dim, head_dim, bias=False)
@@ -76,7 +78,25 @@ class AttentionSingleHead(nn.Module):
         s = q @ torch.transpose(k, 2, 1) / self.head_dim**0.5
         # transpose [B,T,ch] -> [B,ch,T]
         # matrix multiply: [B, T, head_dim]*[B ,head_dim, T] = [B, T, T]
-        a = F.softmax(s, dim=-1)  # [B, T, T]
+        if self.masked:
+            b, t, ch = x_in.shape
+
+            # # Ali Ghodsi Method
+            # tril = torch.triu(torch.ones(t, t))
+            # # [1, 1, 1]
+            # # [0, 1, 1]
+            # # [0, 0, 1]
+            # m = torch.zeros((t, t))
+            # m.masked_fill(tril == 1, float('-inf'))
+            # a = F.softmax(s+m, dim=-1)
+
+            # Andrej Karpathy Way
+            tril = torch.tril(torch.ones(t, t))
+            s = s.masked_fill(tril == 0, float('-inf'))
+            a = F.softmax(s, dim=-1)
+
+        else:
+            a = F.softmax(s, dim=-1)  # [B, T, T]
 
         y = a @ v  # [B,T,T] * [B,T,head_dim] = [B,T,head_dim]
 
@@ -87,11 +107,12 @@ class AttentionSingleHead(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, embed_dim, n_heads):
+    def __init__(self, embed_dim, n_heads, masked=False):
         """
         Multi-headed attention
         :param embed_dim:
         :param n_heads:
+        :param masked (Default = False)
         """
         super().__init__()
         self.embed_dim = embed_dim
@@ -107,7 +128,7 @@ class MultiHeadedAttention(nn.Module):
 
         # Declare the layers
         self.attention_layers = nn.ModuleList(
-            AttentionSingleHead(embed_dim, head_dim=self.attn_head_dim) for _ in range(n_heads))
+            AttentionSingleHead(embed_dim, head_dim=self.attn_head_dim, masked=masked) for _ in range(n_heads))
 
     def forward(self, x_in):
         """
