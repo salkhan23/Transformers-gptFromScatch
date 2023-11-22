@@ -55,7 +55,7 @@ class AttentionSingleHead(nn.Module):
         """
         super().__init__()
         self.embed_dim = embed_dim
-        self.head_dim = torch.tensor(head_dim, dtype=torch.int)
+        self.head_dim = head_dim
 
         # Define the layers
         self.query = nn.Linear(embed_dim, head_dim, bias=False)
@@ -73,7 +73,7 @@ class AttentionSingleHead(nn.Module):
         v = self.value(x_in)  # [B,T, head_dim]
 
         # scaled_dot_product score/attention
-        s = q @ torch.transpose(k, 2, 1) / torch.sqrt(self.head_dim)
+        s = q @ torch.transpose(k, 2, 1) / self.head_dim**0.5
         # transpose [B,T,ch] -> [B,ch,T]
         # matrix multiply: [B, T, head_dim]*[B ,head_dim, T] = [B, T, T]
         a = F.softmax(s, dim=-1)  # [B, T, T]
