@@ -82,22 +82,25 @@ class AttentionSingleHead(nn.Module):
         if self.masked:
             b, t, ch = x_in.shape
 
-            # # Ali Ghodsi Method
-            # tril = torch.triu(torch.ones(t, t))
-            # # [1, 1, 1]
-            # # [0, 1, 1]
-            # # [0, 0, 1]
-            # m = torch.zeros((t, t))
-            # m.masked_fill(tril == 1, float('-inf'))
-            # a = F.softmax(s+m, dim=-1)
+            # Ali Ghodsi way
+            # Mask should be  [0 -inf, -inf]
+            #                 [0,   0, -inf]
+            #                 [0,   0,    0]
+            tril = torch.triu(torch.ones(t, t))
+            m = torch.zeros((t, t))
+            m.masked_fill(tril == 1, float('-inf'))
+            s = s + m
 
-            # Andrej Karpathy Way
+            # # Andrej Karpathy way
+            # Mask [1,-inf, -inf]
+            #      [1,   1, -inf]
+            #      [1,   1,    1]
             tril = torch.tril(torch.ones(t, t))
             s = s.masked_fill(tril == 0, float('-inf'))
-            a = F.softmax(s, dim=-1)
 
-        else:
-            a = F.softmax(s, dim=-1)  # [B, T, T]
+        a = F.softmax(s, dim=1)  # [B, T, T]
+        # TODO: Performance and better generated text if softmax over second dimension vs. last.
+        #  Both are T Why is one better than the other?
 
         y = a @ v  # [B,T,T] * [B,T,head_dim] = [B,T,head_dim]
 
