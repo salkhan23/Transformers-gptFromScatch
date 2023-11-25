@@ -18,8 +18,9 @@ def get_positional_embeddings_matrix(max_pos, embed_dim):
 
     for pos in range(max_pos):
         for i in range(embed_dim // 2):
-            mat[pos, 2*i] = torch.sin(torch.tensor(pos/10000**(2*i/embed_dim)))
-            mat[pos, 2*i+1] = torch.cos(torch.tensor(pos/10000**(2*i/embed_dim)))
+            angle = torch.tensor(pos/(10000**(2*i/embed_dim)))
+            mat[pos, 2*i] = torch.sin(angle)
+            mat[pos, 2*i+1] = torch.cos(angle)
 
     return mat
 
@@ -158,18 +159,15 @@ class GptModel(nn.Module):
 
         # Word/ Symbol Embeddings
         # self.embedding_table.weight = [vocab_s, embed_dim] mat. Each Row is a separate vocab word
-        self.embedding_table = nn.Embedding(num_embeddings=vocab_s, embedding_dim=embed_dim)
+        self.token_embed = nn.Embedding(num_embeddings=vocab_s, embedding_dim=embed_dim)
 
         # Positional embeddings
-        self.pos_embeddings = nn.Embedding(num_embeddings=block_s, embedding_dim=embed_dim)
-        # Used fixed positional embeddings
-        pos_embed_table = get_positional_embeddings_matrix(block_s, embed_dim)
-        self.pos_embeddings.weight.requires_grad = False
-        self.pos_embeddings.weight.copy_(pos_embed_table)
-        # IMP: PyTorch does not like creation of new variables in the forward function. Cannot move them to
-        # device. Their add device type as an input parameter, or declare the variable here, so it is correctly
-        # moved to the device in the forward function. Register buffer, tells pytorch, this is a variable
-        # whose gradient does not need to be tracked.
+        pos_embed_table = get_positional_embeddings_matrix(max_pos=block_s, embed_dim=embed_dim)
+        self.pos_embed = nn.Embedding.from_pretrained(pos_embed_table, freeze=True)
+        # Note: PyTorch does not like creation of new variables in the forward function. Cannot move them to
+        # device. Need to either (1) add device as an input parameter, or (2) declare the variable in
+        # initialization and use it in the forward function. Register buffer, tells pytorch that this is
+        # a variable whose gradient does not need to be tracked.
         self.register_buffer('pos_v', torch.arange(block_s))
 
         # Multi-headed attention layer
@@ -190,13 +188,14 @@ class GptModel(nn.Module):
         """
         b, t = x_in.shape
 
-        token_emb = self.embedding_table(x_in)  # [B,T, embed_dim]
-        pos_emb = self.pos_embeddings(self.pos_v[:t])  # [t, embed_dim]
+        token_embeddings = self.token_embed(x_in)  # [B,T, embed_dim]
+        pos_embeddings = self.pos_embed(self.pos_v[:t])  # [t, embed_dim]
+        pos_embeddings = pos_embeddings.to(torch.float32)  # float32 like the token embed
 
         # Add position and token embedding.
         # Broadcasting handles the extension to the batch dim.
         # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
-        x = token_emb + pos_emb  # [B, T, embed_dim]
+        x = token_embeddings + pos_embeddings  # [B, T, embed_dim]
 
         attended_x = self.self_attention(x)
 
