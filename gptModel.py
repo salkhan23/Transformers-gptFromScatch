@@ -168,6 +168,43 @@ class FeedForward(nn.Module):
         return x
 
 
+class DecoderBlock(nn.Module):
+    def __init__(self, embed_dim, n_heads, max_context_len):
+        """
+        Decoder block of a Transformer
+        :param embed_dim:
+        :param n_heads:
+        :param max_context_len:
+        """
+        super().__init__()
+
+        self.embed_dim = embed_dim
+        self.n_heads = n_heads
+        self.max_context_len = max_context_len
+
+        # Layers -------------------------------------------------------------------------
+        self.self_attention = \
+            MultiHeadedAttention(embed_dim=embed_dim, n_heads=n_heads, causal=True, max_context_len=max_context_len)
+        self.attn_layer_norm = nn.LayerNorm(embed_dim)
+
+        self.feedforward = FeedForward(embed_dim, embed_dim)
+        self.ff_layer_norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x_in):
+        """
+
+        :param x_in: [B,T,embed_dim]
+        :return:
+        """
+        x = self.self_attention(x_in)
+        x = x + self.attn_layer_norm(x)  # Layer norm + residual connection
+
+        x = self.feedforward(x)
+        x = x + self.ff_layer_norm(x)  # Layer norm + residual connection
+
+        return x
+
+
 class GptModel(nn.Module):
     def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads):
         """
@@ -197,14 +234,8 @@ class GptModel(nn.Module):
         # a variable whose gradient does not need to be tracked.
         self.register_buffer('pos_v', torch.arange(block_s))
 
-        # Multi-headed attention layer
-        self.self_attention = \
-            MultiHeadedAttention(embed_dim=embed_dim, n_heads=n_attn_heads, causal=True, max_context_len=block_s)
-
-        self.layer_norm = nn.LayerNorm(embed_dim)
-
-        # Feedforward layer
-        self.feedforward = FeedForward(in_ch=embed_dim, out_ch=embed_dim)
+        self.transformer_decoder_block = \
+            DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s)
 
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
@@ -228,16 +259,9 @@ class GptModel(nn.Module):
         # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
         x = token_embeddings + pos_embeddings  # [B, T, embed_dim]
 
-        attended_x = self.self_attention(x)
+        x = self.transformer_decoder_block(x)
 
-        # Add the residual connection
-        z = attended_x + x
-        # Layer normalization
-        r = self.layer_norm(z)
-
-        r = self.feedforward(r)
-
-        logits1 = self.linear(r)  # [B,T, vocab_s]
+        logits1 = self.linear(x)  # [B,T, vocab_s]
 
         loss1 = None
         if y_in is not None:
