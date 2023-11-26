@@ -144,6 +144,30 @@ class MultiHeadedAttention(nn.Module):
         return z
 
 
+class FeedForward(nn.Module):
+    def __init__(self, in_ch, out_ch):
+        """
+        Simple Feedforward Layer
+        :param in_ch:
+        :param out_ch:
+        """
+        super().__init__()
+        self.in_ch = in_ch
+        self.out_ch = out_ch
+
+        # Layers ---------------------
+        self.ff = nn.Linear(in_ch, out_ch)
+
+    def forward(self, x_in):
+        """
+        :param x_in: [B,T,in_ch]
+        :return: [B,T, out_ch]
+        """
+        x = self.ff(x_in)
+        x = torch.relu(x)
+        return x
+
+
 class GptModel(nn.Module):
     def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads):
         """
@@ -179,6 +203,9 @@ class GptModel(nn.Module):
 
         self.layer_norm = nn.LayerNorm(embed_dim)
 
+        # Feedforward layer
+        self.feedforward = FeedForward(in_ch=embed_dim, out_ch=embed_dim)
+
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
 
@@ -205,9 +232,10 @@ class GptModel(nn.Module):
 
         # Add the residual connection
         z = attended_x + x
-
         # Layer normalization
         r = self.layer_norm(z)
+
+        r = self.feedforward(r)
 
         logits1 = self.linear(r)  # [B,T, vocab_s]
 
