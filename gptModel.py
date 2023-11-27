@@ -238,8 +238,11 @@ class GptModel(nn.Module):
         # a variable whose gradient does not need to be tracked.
         self.register_buffer('pos_v', torch.arange(block_s))
 
-        self.transformer_decoder_block = \
+        self.blocks = nn.Sequential(
+            DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s),
+            DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s),
             DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s)
+        )
 
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
@@ -263,7 +266,7 @@ class GptModel(nn.Module):
         # pos_emb: [t,embed_dim] --> [1,t, embed_dim]  -->[b,t,embed_dim]
         x = token_embeddings + pos_embeddings  # [B, T, embed_dim]
 
-        x = self.transformer_decoder_block(x)
+        x = self.blocks(x)
 
         logits1 = self.linear(x)  # [B,T, vocab_s]
 
