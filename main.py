@@ -41,11 +41,12 @@ def main():
     block_size = 8  # context size
     batch_size = 32
     n_iters = 5000
-    lr = 1e-5
+    lr = 0.5e-4
     eval_interval = 500
     eval_iters = 200
     embed_dim = 32
     n_heads = 4
+    n_layers = 4
 
     # -----------------------------------------------------------------------------------
     # Data Access
@@ -152,7 +153,8 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     # net = bigramLanguageModel.BigramLanguageModel(vocab_size)
-    net = gptModel.GptModel(vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads)
+    net = gptModel.GptModel(
+        vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads, n_layers=n_layers)
 
     net = net.to(device)
     print("Model Details: {}".format('*'*60))
