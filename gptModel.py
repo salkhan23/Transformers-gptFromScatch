@@ -200,11 +200,11 @@ class DecoderBlock(nn.Module):
         :param x_in: [B,T,embed_dim]
         :return:
         """
-        x = self.self_attention(x_in)
-        x = x + self.attn_layer_norm(x)  # Layer norm + residual connection
+        x = self.attn_layer_norm(x_in)  # pre-layer norm (no more standard vs. post layer norm)
+        x = x + self.self_attention(x_in)
 
-        x = self.feedforward(x)
-        x = x + self.ff_layer_norm(x)  # Layer norm + residual connection
+        x = self.ff_layer_norm(x)  # pre-layer norm (no more standard vs. post layer norm)
+        x = x + self.ff_layer_norm(x)
 
         return x
 
