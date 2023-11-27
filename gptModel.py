@@ -133,6 +133,7 @@ class MultiHeadedAttention(nn.Module):
         self.attention_heads = nn.ModuleList(
             AttentionHead(embed_dim=embed_dim, head_dim=self.single_head_dim, causal=causal,
                           max_context_len=max_context_len) for _ in range(n_heads))
+        self.projection = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x_in):
         """
@@ -140,8 +141,9 @@ class MultiHeadedAttention(nn.Module):
         :param x_in: [B,T, embed_dim]
         :return:
         """
-        z = torch.concat([head(x_in) for head in self.attention_heads], dim=2)  # concatenate on embed dim
-        return z
+        out = torch.concat([head(x_in) for head in self.attention_heads], dim=2)  # concatenate on embed dim
+        out = self.projection(out)
+        return out
 
 
 class FeedForward(nn.Module):
@@ -157,6 +159,7 @@ class FeedForward(nn.Module):
 
         # Layers ---------------------
         self.ff = nn.Linear(in_ch, out_ch)
+        self.proj = nn.Linear(out_ch, out_ch)
 
     def forward(self, x_in):
         """
@@ -165,6 +168,7 @@ class FeedForward(nn.Module):
         """
         x = self.ff(x_in)
         x = torch.relu(x)
+        x = self.proj(x)
         return x
 
 
