@@ -249,6 +249,9 @@ class GptModel(nn.Module):
         )
         # The * operator is used for unpacking elements from iterable objects
 
+        self.final_layer_norm = nn.LayerNorm(embed_dim)  # Final Layer norm @ the end of the all the  decoder blocks
+        # but before the final layer.
+
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
 
@@ -272,6 +275,7 @@ class GptModel(nn.Module):
         x = token_embeddings + pos_embeddings  # [B, T, embed_dim]
 
         x = self.blocks(x)
+        x = self.final_layer_norm(x)
 
         logits1 = self.linear(x)  # [B,T, vocab_s]
 
