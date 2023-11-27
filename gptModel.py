@@ -158,8 +158,8 @@ class FeedForward(nn.Module):
         self.out_ch = out_ch
 
         # Layers ---------------------
-        self.ff = nn.Linear(in_ch, out_ch)
-        self.proj = nn.Linear(out_ch, out_ch)
+        self.ff = nn.Linear(in_ch, 4*in_ch)
+        self.proj = nn.Linear(4*in_ch, out_ch)
 
     def forward(self, x_in):
         """
