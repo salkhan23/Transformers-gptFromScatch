@@ -70,6 +70,8 @@ class AttentionHead(nn.Module):
         if causal:
             self.register_buffer('tril', torch.tril(torch.ones((max_context_len, max_context_len)))),  # [T, T]
 
+        self.dropout = nn.Dropout()
+
     def forward(self, x_in):
         """
         :param x_in: [B,T, embed_dim] matrix of indices
@@ -99,6 +101,8 @@ class AttentionHead(nn.Module):
         a = F.softmax(s, dim=1)  # [B, head_dim, T] @ [B, T, T] = [B, head_dim, T]
         # TODO: Better Performance and generated text if softmax over second dimension vs. last.
         #  Both are T Why is one better than the other?
+
+        a = self.dropout(a)
 
         z = a @ v  # [B, T, T] @ [B, T, head_dim]   [B, T, head_dim]
 
@@ -134,6 +138,7 @@ class MultiHeadedAttention(nn.Module):
             AttentionHead(embed_dim=embed_dim, head_dim=self.single_head_dim, causal=causal,
                           max_context_len=max_context_len) for _ in range(n_heads))
         self.projection = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout()
 
     def forward(self, x_in):
         """
@@ -143,6 +148,7 @@ class MultiHeadedAttention(nn.Module):
         """
         out = torch.concat([head(x_in) for head in self.attention_heads], dim=2)  # concatenate on embed dim
         out = self.projection(out)
+        out = self.dropout(out)
         return out
 
 
@@ -160,6 +166,7 @@ class FeedForward(nn.Module):
         # Layers ---------------------
         self.ff = nn.Linear(in_ch, 4*in_ch)
         self.proj = nn.Linear(4*in_ch, out_ch)
+        self.dropout = nn.Dropout()
 
     def forward(self, x_in):
         """
@@ -169,6 +176,7 @@ class FeedForward(nn.Module):
         x = self.ff(x_in)
         x = torch.relu(x)
         x = self.proj(x)
+        x = self.dropout(x)  # might be time to consider nn.Sequential
         return x
 
 
