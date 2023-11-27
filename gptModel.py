@@ -210,18 +210,24 @@ class DecoderBlock(nn.Module):
 
 
 class GptModel(nn.Module):
-    def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads):
+    def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads, n_layers=1):
         """
+        Causal Self Attention (Decoder) Block
 
         :param vocab_s:
-        :return:
+        :param embed_dim:
+        :param block_s:
+        :param n_attn_heads:
+        :param n_layers: Number of sequential decoder blocks, # of layers
         """
+
         super().__init__()
 
         self.vocab_s = vocab_s
         self.embed_dim = embed_dim
         self.block_s = block_s
         self.n_attn_heads = n_attn_heads
+        self.n_layers = n_layers
 
         # Declare the layers  ----------------------------------------------------------------
 
@@ -239,10 +245,9 @@ class GptModel(nn.Module):
         self.register_buffer('pos_v', torch.arange(block_s))
 
         self.blocks = nn.Sequential(
-            DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s),
-            DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s),
-            DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s)
+            *[DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s) for _ in range(n_layers)]
         )
+        # The * operator is used for unpacking elements from iterable objects
 
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
