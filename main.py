@@ -41,7 +41,7 @@ def main():
     block_size = 8  # context size
     batch_size = 32
     n_iters = 5000
-    lr = 1e-4
+    lr = 1e-5
     eval_interval = 500
     eval_iters = 200
     embed_dim = 32
