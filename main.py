@@ -66,7 +66,7 @@ def main():
     # Get the set of all characters
     characters = sorted(list(set(text)))
     vocab_size = len(characters)
-    print("Datatset contains {} characters:{}".format(vocab_size, ''.join(characters)))
+    print("Data set contains {} characters:{}".format(vocab_size, ''.join(characters)))
 
     # Create numerical representation of characters
     ctoi = {c: i for i, c in enumerate(characters)}
@@ -152,8 +152,11 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     # net = bigramLanguageModel.BigramLanguageModel(vocab_size)
-    net = gptModel.GptModel(vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=2)
+    net = gptModel.GptModel(vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads)
+
     net = net.to(device)
+    print("Model Details: {}".format('*'*60))
+    gptModel.print_model_parameters(net)
 
     # # DEBUG: Generate code from the untrained model
     # generated_embeddings = generate_data_from_model(net, 100)
