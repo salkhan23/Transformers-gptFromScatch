@@ -10,6 +10,7 @@
 
 import torch
 import numpy as np
+from datetime import datetime
 import bigramLanguageModel
 import gptModel
 
@@ -172,6 +173,10 @@ def main():
     # Setup an optimizer
     optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
 
+    print("Start Training ...")
+    train_start_time = datetime.now()
+    eval_start_time = train_start_time
+
     optimizer.zero_grad(set_to_none=True)
     for n_idx in range(n_iters):
         bx, by = get_batch(batch_size, block_size, 'train')
@@ -184,7 +189,11 @@ def main():
         # evaluate the mode
         if (n_idx % eval_interval) == 0:
             losses = estimate_loss(net)
-            print("{:4} train loss {:0.4f}, val loss {:0.4f}".format(n_idx, losses['train'], losses['val']))
+            print("{:4} Duration {} train loss {:0.4f}, val loss {:0.4f}".format(
+                n_idx, datetime.now() - eval_start_time, losses['train'], losses['val']))
+            eval_start_time = datetime.now()
+
+    print("Training Finished. Duration {}".format(datetime.now() - train_start_time))
 
     # Generate Code from the trained model
     generated_embeddings = generate_data_from_model(net, 300)
