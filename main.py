@@ -38,15 +38,16 @@ def main():
     # -----------------------------------------------------------------------------------
     # Model variables
     # -----------------------------------------------------------------------------------
-    block_size = 8  # context size
-    batch_size = 32
+    block_size = 256  # context size
+    batch_size = 64
     n_iters = 5000
-    lr = 0.5e-4
+    lr = 0.5e-6
     eval_interval = 500
     eval_iters = 200
-    embed_dim = 32
-    n_heads = 4
-    n_layers = 4
+    embed_dim = 384
+    n_heads = 6
+    n_layers = 6
+    p_dropout = 0.2
 
     # -----------------------------------------------------------------------------------
     # Data Access
@@ -154,7 +155,8 @@ def main():
     # -------------------------------------------------------------------------------------
     # net = bigramLanguageModel.BigramLanguageModel(vocab_size)
     net = gptModel.GptModel(
-        vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads, n_layers=n_layers)
+        vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads, n_layers=n_layers,
+        p_dropout=p_dropout)
 
     net = net.to(device)
     print("Model Details: {}".format('*'*60))

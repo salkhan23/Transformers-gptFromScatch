@@ -48,18 +48,20 @@ def print_model_parameters(m):
 
 
 class AttentionHead(nn.Module):
-    def __init__(self, embed_dim, head_dim, max_context_len, causal=False):
+    def __init__(self, embed_dim, head_dim, max_context_len, causal=False, p_dropout=0.5):
         """
 
         :param embed_dim: input embeddings dimensionality
         :param head_dim: output dimensionality of head
         :params max_context_len: max length of context window
         :param causal: whether inputs can look at future time steps or not. Default = True
+        :param p_dropout
         """
         super().__init__()
         self.causal = causal
         self.embed_dim = embed_dim
         self.head_dim = head_dim
+        self.p_dropout = p_dropout
 
         # Layers
         self.key = nn.Linear(embed_dim, head_dim, bias=False)
@@ -70,7 +72,7 @@ class AttentionHead(nn.Module):
         if causal:
             self.register_buffer('tril', torch.tril(torch.ones((max_context_len, max_context_len)))),  # [T, T]
 
-        self.dropout = nn.Dropout()
+        self.dropout = nn.Dropout(p_dropout)
 
     def forward(self, x_in):
         """
@@ -112,7 +114,7 @@ class AttentionHead(nn.Module):
 
 
 class MultiHeadedAttention(nn.Module):
-    def __init__(self, embed_dim, n_heads, max_context_len, causal=False):
+    def __init__(self, embed_dim, n_heads, max_context_len, causal=False, p_dropout=0.5):
         """
 
         :param embed_dim:
@@ -126,6 +128,7 @@ class MultiHeadedAttention(nn.Module):
         self.n_heads = n_heads
         self.causal = causal
         self.max_context_len = max_context_len
+        self.p_dropout = p_dropout
 
         if embed_dim % n_heads != 0:
             raise Exception(
@@ -136,9 +139,9 @@ class MultiHeadedAttention(nn.Module):
         # layers ---------
         self.attention_heads = nn.ModuleList(
             AttentionHead(embed_dim=embed_dim, head_dim=self.single_head_dim, causal=causal,
-                          max_context_len=max_context_len) for _ in range(n_heads))
+                          max_context_len=max_context_len, p_dropout=p_dropout) for _ in range(n_heads))
         self.projection = nn.Linear(embed_dim, embed_dim)
-        self.dropout = nn.Dropout()
+        self.dropout = nn.Dropout(p_dropout)
 
     def forward(self, x_in):
         """
@@ -153,7 +156,7 @@ class MultiHeadedAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, in_ch, out_ch):
+    def __init__(self, in_ch, out_ch, p_dropout=0.5):
         """
         Simple Feedforward Layer
         :param in_ch:
@@ -162,11 +165,12 @@ class FeedForward(nn.Module):
         super().__init__()
         self.in_ch = in_ch
         self.out_ch = out_ch
+        self.p_dropout = p_dropout
 
         # Layers ---------------------
         self.ff = nn.Linear(in_ch, 4*in_ch)
         self.proj = nn.Linear(4*in_ch, out_ch)
-        self.dropout = nn.Dropout()
+        self.dropout = nn.Dropout(p_dropout)
 
     def forward(self, x_in):
         """
@@ -181,22 +185,24 @@ class FeedForward(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, embed_dim, n_heads, max_context_len):
+    def __init__(self, embed_dim, n_heads, max_context_len, p_dropout=0.5):
         """
         Decoder block of a Transformer
         :param embed_dim:
         :param n_heads:
         :param max_context_len:
+        :param p_dropout
         """
         super().__init__()
 
         self.embed_dim = embed_dim
         self.n_heads = n_heads
         self.max_context_len = max_context_len
+        self.p_dropout = p_dropout
 
         # Layers -------------------------------------------------------------------------
-        self.self_attention = \
-            MultiHeadedAttention(embed_dim=embed_dim, n_heads=n_heads, causal=True, max_context_len=max_context_len)
+        self.self_attention = MultiHeadedAttention(
+            embed_dim=embed_dim, n_heads=n_heads, causal=True, max_context_len=max_context_len, p_dropout=p_dropout)
         self.attn_layer_norm = nn.LayerNorm(embed_dim)
 
         self.feedforward = FeedForward(embed_dim, embed_dim)
@@ -218,7 +224,7 @@ class DecoderBlock(nn.Module):
 
 
 class GptModel(nn.Module):
-    def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads, n_layers=1):
+    def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads, n_layers=1, p_dropout=0.5):
         """
         Causal Self Attention (Decoder) Block
 
@@ -227,6 +233,7 @@ class GptModel(nn.Module):
         :param block_s:
         :param n_attn_heads:
         :param n_layers: Number of sequential decoder blocks, # of layers
+        :param p_dropout: dropout probabilities for dropout layers used after fully connected layers in decoder blocks
         """
 
         super().__init__()
@@ -236,6 +243,7 @@ class GptModel(nn.Module):
         self.block_s = block_s
         self.n_attn_heads = n_attn_heads
         self.n_layers = n_layers
+        self.p_dropout = p_dropout
 
         # Declare the layers  ----------------------------------------------------------------
 
@@ -253,7 +261,8 @@ class GptModel(nn.Module):
         self.register_buffer('pos_v', torch.arange(block_s))
 
         self.blocks = nn.Sequential(
-            *[DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s) for _ in range(n_layers)]
+            *[DecoderBlock(embed_dim=embed_dim, n_heads=n_attn_heads, max_context_len=block_s, p_dropout=p_dropout)
+              for _ in range(n_layers)]
         )
         # The * operator is used for unpacking elements from iterable objects
 
