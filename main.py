@@ -13,6 +13,7 @@ import numpy as np
 from datetime import datetime
 import bigramLanguageModel
 import gptModel
+import gptModelPytorchBlocks
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print("Using {} device".format(device))
@@ -48,7 +49,7 @@ def main():
     embed_dim = 384
     n_heads = 6
     n_layers = 6
-    p_dropout = 0.2
+    p_dropout = 0.1
 
     # -----------------------------------------------------------------------------------
     # Data Access
@@ -155,9 +156,12 @@ def main():
     # training
     # -------------------------------------------------------------------------------------
     # net = bigramLanguageModel.BigramLanguageModel(vocab_size)
-    net = gptModel.GptModel(
+    # net = gptModel.GptModel(
+    #     vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads, n_layers=n_layers,
+    #     p_dropout=p_dropout)
+    net = gptModelPytorchBlocks.GptModel(
         vocab_size, embed_dim=embed_dim, block_s=block_size, n_attn_heads=n_heads, n_layers=n_layers,
-        p_dropout=p_dropout)
+        p_dropout=p_dropout, device=device)
 
     net = net.to(device)
     print("Model Details: {}".format('*'*60))
