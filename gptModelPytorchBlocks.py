@@ -9,11 +9,16 @@
 # ---------------------------------------------------------------------------------------
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 def get_positional_embeddings_matrix(max_pos, embed_dim):
     """
     Returns a [max_pos, embed] matrix of positional embeddings.
+    Uses exp(log of the division term)to simplify implementation
+
+    https://medium.com/@hunter-j-phillips/positional-encoding-7a93db4109e6
+    https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 
     :param max_pos:
     :param embed_dim:
@@ -21,11 +26,12 @@ def get_positional_embeddings_matrix(max_pos, embed_dim):
     """
     mat = torch.zeros((max_pos, embed_dim), dtype=torch.float64)
 
-    for pos in range(max_pos):
-        for i in range(embed_dim // 2):
-            angle = torch.tensor(pos/(10000**(2*i/embed_dim)))
-            mat[pos, 2*i] = torch.sin(angle)
-            mat[pos, 2*i+1] = torch.cos(angle)
+    pos_idxs = torch.arange(0, max_pos).reshape(max_pos, 1)  # [max_pos, 1]
+
+    div_term = torch.exp(torch.arange(0, embed_dim, 2) * np.log(10000) / embed_dim)
+
+    mat[:, 0::2] = torch.sin(pos_idxs * div_term)
+    mat[:, 1::2] = torch.cos(pos_idxs * div_term)
 
     return mat
 
@@ -136,28 +142,6 @@ class GptModel(nn.Module):
 
 
 if __name__ == "__main__":
-
-    def print_model_parameters(m):
-        """
-        Print Model Parameters, their size and whether they are trainable or not
-        :param m:
-        :return:
-        """
-        print("{}\nModel Details\n{}".format('-' * 90, '-' * 90))
-
-        n_train_p = 0
-        n_fixed_p = 0
-
-        for name, param in m.named_parameters():
-            print("Parameter: {}, size {}, Trainable {}".format(name, param.shape, param.requires_grad))
-
-            if param.requires_grad:
-                n_train_p += torch.numel(param)
-            else:
-                n_fixed_p += torch.numel(param)
-
-        print("\nTotal Number of Parameters {}, Trainable {}, Fixed {}".format(n_train_p + n_fixed_p, n_train_p,
-                                                                               n_fixed_p))
 
     model = GptModel(vocab_s=4, embed_dim=64, block_s=8, n_attn_heads=2, n_layers=1, p_dropout=0.1, device='cpu')
     print(model)

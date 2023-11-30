@@ -9,6 +9,10 @@ import torch.nn.functional as F
 def get_positional_embeddings_matrix(max_pos, embed_dim):
     """
     Returns a [max_pos, embed] matrix of positional embeddings.
+    Uses exp(log of the division term)to simplify implementation
+
+    https://medium.com/@hunter-j-phillips/positional-encoding-7a93db4109e6
+    https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 
     :param max_pos:
     :param embed_dim:
@@ -16,11 +20,12 @@ def get_positional_embeddings_matrix(max_pos, embed_dim):
     """
     mat = torch.zeros((max_pos, embed_dim), dtype=torch.float64)
 
-    for pos in range(max_pos):
-        for i in range(embed_dim // 2):
-            angle = torch.tensor(pos/(10000**(2*i/embed_dim)))
-            mat[pos, 2*i] = torch.sin(angle)
-            mat[pos, 2*i+1] = torch.cos(angle)
+    pos_idxs = torch.arange(0, max_pos).reshape(max_pos, 1)  # [max_pos, 1]
+
+    div_term = torch.exp(torch.arange(0, embed_dim, 2) * np.log(10000) / embed_dim)
+
+    mat[:, 0::2] = torch.sin(pos_idxs * div_term)
+    mat[:, 1::2] = torch.cos(pos_idxs * div_term)
 
     return mat
 
