@@ -198,9 +198,9 @@ def main():
     for n_idx in range(n_iters):
         bx, by = get_batch(batch_size, block_size, 'train')
 
-        # Estimate the loss
         logits = net(bx)
 
+        # Estimate the loss
         # cross entropy loss expects input in the format (..., ch, ...). Reshape matrices to include
         # batch and context length into a single dimension and such that ch appears in the second dimension.
         loss = loss_fcn(
@@ -210,7 +210,7 @@ def main():
         loss.backward()
         optimizer.step()
 
-        # evaluate the mode
+        # Evaluate the model
         if (n_idx % eval_interval) == 0:
             losses = estimate_loss(net)
             print("{:4} Duration {} train loss {:0.4f}, val loss {:0.4f}, lr={}".format(
