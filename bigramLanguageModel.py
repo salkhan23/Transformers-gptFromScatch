@@ -28,12 +28,10 @@ class BigramLanguageModel(nn.Module):
         # -------------------------------------------------------------------------------
         self.token_embedding_table = nn.Embedding(num_embeddings=vocab_s, embedding_dim=vocab_s)
 
-    def forward(self, indices, targets=None):
+    def forward(self, indices):
         """
-
         :param indices:  [b, t]; b = num batches, t = num time steps ()
-        :param targets: [b, t]; for each input, what is the exected output. (word indcies)
-        :return: embeddings, loss1
+        :return: embeddings
         """
 
         # For each input index, replace it with its word embedding
@@ -41,27 +39,9 @@ class BigramLanguageModel(nn.Module):
 
         b, t, ch = embeddings.shape
 
-        logits1 = embeddings.reshape(b * t, ch)  # logits because we consider this the output of the model
-        loss1 = None
+        logits1 = embeddings  # logits because we consider this the output of the model
 
-        if targets is not None:
-            # * Optimize the 'trainable' embeddings such that the model predicts the next work or the target
-            # * Typically this is done outside the model  definition. Here it is included in the forward
-            #   pass just for simplicity
-            #
-            # * We chose the dimensionality of embedding layer to equal the number of classes, hense
-            #   can call categorical cross entropy loss directly on the embedding layer.
-
-            # cross entropy function expects channels (one for each class) in its second
-            # dimension. The first dimension corresponds to each input sample, therefore concatenate
-            # the time and batch dimension for both the input and the output.
-            targets = targets.reshape(b*t)
-
-            # * nn.functional.cross_entropy (F) is  call in functional form, PYTORCH does not create
-            # a module for it
-            loss1 = F.cross_entropy(logits1, targets)
-
-        return embeddings, loss1
+        return embeddings
 
     def generate(self, indices, max_new_tokens):
         """
@@ -73,7 +53,7 @@ class BigramLanguageModel(nn.Module):
 
         for _ in range(max_new_tokens):
             # Get the predictions
-            logits1, loss1 = self(indices)  # calls forward function, (nn.module)
+            logits1 = self(indices)  # calls forward function, (nn.module)
 
             # Focus on the last time step
             logits1 = logits1[:, -1, :]  # [b, t, c] --> [b, c]. Note that when this function is used b == 1

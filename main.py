@@ -43,7 +43,7 @@ def main():
     block_size = 256  # context size
     batch_size = 64
     n_iters = 5000
-    lr = 0.5e-6
+    lr = 1e-6
     eval_interval = 500
     eval_iters = 200
     embed_dim = 384
@@ -138,6 +138,11 @@ def main():
     # print("Label [Size {}]\n{}".format(yb.shape, yb))
     # print("-"*80)
 
+    # ------------------------------------------------------------------------------------
+    # Loss function
+    # ------------------------------------------------------------------------------------
+    loss_fcn = torch.nn.CrossEntropyLoss()
+
     @torch.no_grad()
     def estimate_loss(model,):
         model.eval()
@@ -145,8 +150,15 @@ def main():
         for split in ['val', 'train']:
             losses1 = torch.zeros(eval_iters)
             for e_idx in range(eval_iters):
+
                 x1, y1 = get_batch(batch_size, block_size, split)
-                logits1, loss1 = model(x1, y1)
+
+                logits1 = model(x1)
+
+                loss1 = loss_fcn(
+                    logits1.reshape(batch_size*block_size, vocab_size),
+                    y1.reshape(batch_size*block_size))
+
                 losses1[e_idx] = loss1.item()
             out[split] = losses1.mean()
         model.train()
@@ -176,6 +188,7 @@ def main():
     # ---------------------------------------
     # Setup an optimizer
     optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     print("Start Training ...")
     train_start_time = datetime.now()
@@ -186,16 +199,24 @@ def main():
         bx, by = get_batch(batch_size, block_size, 'train')
 
         # Estimate the loss
-        logits, loss = net(bx, by)
+        logits = net(bx)
+
+        # cross entropy loss expects input in the format (..., ch, ...). Reshape matrices to include
+        # batch and context length into a single dimension and such that ch appears in the second dimension.
+        loss = loss_fcn(
+            logits.reshape(batch_size*block_size, vocab_size),
+            by.reshape(batch_size*block_size))
+
         loss.backward()
         optimizer.step()
 
         # evaluate the mode
         if (n_idx % eval_interval) == 0:
             losses = estimate_loss(net)
-            print("{:4} Duration {} train loss {:0.4f}, val loss {:0.4f}".format(
-                n_idx, datetime.now() - eval_start_time, losses['train'], losses['val']))
+            print("{:4} Duration {} train loss {:0.4f}, val loss {:0.4f}, lr={}".format(
+                n_idx, datetime.now() - eval_start_time, losses['train'], losses['val'], scheduler.get_last_lr()))
             eval_start_time = datetime.now()
+            scheduler.step()
 
     print("Training Finished. Duration {}".format(datetime.now() - train_start_time))
 

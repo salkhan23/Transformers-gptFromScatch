@@ -4,6 +4,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 def get_positional_embeddings_matrix(max_pos, embed_dim):
@@ -277,11 +278,10 @@ class GptModel(nn.Module):
         # Map from embedding dimension to output classes for final output.
         self.linear = nn.Linear(in_features=embed_dim, out_features=vocab_s)
 
-    def forward(self, x_in, y_in=None):
+    def forward(self, x_in):
         """
 
         :param x_in: [B, T]  [Batch, time] matrix of input embeddings indexes
-        :param y_in: [B,T], [Batch, time] matrix of output embeddings indexes
 
         :return:
         """
@@ -301,21 +301,15 @@ class GptModel(nn.Module):
 
         logits1 = self.linear(x)  # [B,T, vocab_s]
 
-        loss1 = None
-        if y_in is not None:
+        # No Softmax, it is done as part of loss calculations.
 
-            logits_a = logits1.reshape(b*t, self.vocab_s)  # [b*t, vocab_s]
-            y_in = y_in.reshape(b*t)
-            # cross entropy loss expects input in the format (..., ch, ...)
-            loss1 = F.cross_entropy(logits_a, y_in)
-
-        return logits1, loss1
+        return logits1
 
     def generate(self, x_in, max_new_tokens):
 
         for idx in range(max_new_tokens):
             # Get the predictions
-            logits1, _ = self(x_in[:, -self.block_s:])  # calls forward function, (nn.module). logits1 = [b, t, c]
+            logits1 = self(x_in[:, -self.block_s:])  # calls forward function, (nn.module). logits1 = [b, t, c]
 
             # Focus on the last time step
             logits1 = logits1[:, -1, :]  # [b, t, c] --> [b, c]. Note that when this function is used b == 1
