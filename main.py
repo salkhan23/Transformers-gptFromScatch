@@ -9,9 +9,10 @@
 # ---------------------------------------------------------------------------------------
 
 import torch
-import numpy as np
 from datetime import datetime
 import torch.utils.data as data
+from tqdm import tqdm
+import os
 
 import bigramLanguageModel
 import gptModel
@@ -38,7 +39,38 @@ def generate_data_from_model(m, n_tokens):
     return predicted_next_indices
 
 
-def main():
+def save_checkpoint(model, optim, epoch, loss, results_dir, save_optim_weights=False):
+    """
+    :param model:
+    :param optim:
+    :param epoch:
+    :param loss:
+    :param results_dir:
+    :param save_optim_weights:
+    :return:
+    """
+    checkpoint_file = os.path.join(results_dir, 'training_checkpoints', "model_" + str(epoch) + ".pt")
+    if not os.path.exists(os.path.dirname(checkpoint_file)):
+        os.makedirs(os.path.dirname(checkpoint_file))
+
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optim.state_dict(),
+        'loss': loss,
+    }, checkpoint_file)
+
+    if save_optim_weights:
+        optim_weights_file = os.path.join(results_dir, 'training_checkpoints', "model_optim.pt")
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optim.state_dict(),
+            'loss': loss,
+        }, optim_weights_file)
+
+
+def main(prev_saved_model_file=None):
 
     # -----------------------------------------------------------------------------------
     # Model variables
@@ -53,6 +85,7 @@ def main():
     n_heads = 6
     n_layers = 6
     p_dropout = 0.1
+    base_results_store_dir = './results'
 
     # -----------------------------------------------------------------------------------
     # Data Access
@@ -60,8 +93,9 @@ def main():
     data_set = shakespeareDataSet.ShakespeareDataSet(max_context_len=block_size, device=device)
     train_set, val_set = torch.utils.data.random_split(data_set, [train_test_split, 1 - train_test_split])
 
-    train_dataloader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    test_dataloader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    train_dataloader = torch.utils.data.DataLoader(
+        train_set, batch_size=batch_size, shuffle=True)
+    test_dataloader = torch.utils.data.DataLoader(val_set, batch_size=batch_size, shuffle=True)
 
     # ------------------------------------------------------------------------------------
     # Loss function
@@ -95,7 +129,7 @@ def main():
         return out
 
     # -------------------------------------------------------------------------------------
-    # training
+    # Model, Optimizer & LR scheduler
     # -------------------------------------------------------------------------------------
     # net = bigramLanguageModel.BigramLanguageModel(data_set.vocab_size)
     # net = gptModel.GptModel(
@@ -106,29 +140,49 @@ def main():
         p_dropout=p_dropout, device=device)
 
     net = net.to(device)
-    print("Model Details: {}".format('*'*60))
-    gptModel.print_model_parameters(net)
 
-    # # DEBUG: Generate code from the untrained model
-    # generated_embeddings = generate_data_from_model(net, 100)
-    # generated_text = decode(generated_embeddings.cpu().numpy())
-    # print("Pretraining Generated Text\n{}".format(generated_text))
-
-    # Start of Training
-    # ---------------------------------------
     # Setup an optimizer
     optimizer = torch.optim.AdamW(net.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
 
+    if prev_saved_model_file is None:
+        print("Model Details: {}".format('*'*60))
+        gptModel.print_model_parameters(net)
+
+        results_store_dir = os.path.join(
+            base_results_store_dir,
+            net.__class__.__name__ + '_' + datetime.now().strftime("_%Y%m%d_%H%M%S"))
+
+        if not os.path.exists(results_store_dir):
+            os.makedirs(results_store_dir)
+
+        start_epoch = 0
+        losses = {"train": 10000, "val": 10000}
+        print("Train from scratch.")
+
+    else:
+        results_store_dir = os.path.dirname(prev_saved_model_file)
+        checkpoint = torch.load(prev_saved_model_file)
+        net.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        start_epoch = checkpoint['epoch']
+        losses = checkpoint['loss']
+        print("Resume training. epoch {}".format(start_epoch))
+
+    # -----------------------------------------------------------------------------------
+    # Training
+    # ----------------------------------------------------------------------------------
     print("Start Training ...")
     train_start_time = datetime.now()
 
     optimizer.zero_grad(set_to_none=True)
-    for e_idx in range(n_epochs):
+    min_val_loss = losses['val']
+    for e_idx in range(start_epoch, n_epochs):
 
         epoch_start_time = datetime.now()
 
-        for step_idx, (bx, by) in enumerate(train_dataloader):
+        for step_idx, (bx, by) in enumerate(tqdm(train_dataloader)):
             logits = net(bx)
 
             # Loss
@@ -142,10 +196,13 @@ def main():
 
         # Estimate Losses
         losses = estimate_loss(net)
+        if losses['val'] < min_val_loss:
+            min_val_loss = losses['val']
 
         print("Epoch {}, Duration {}. Train loss {:0.4f} Test Loss {:0.4f}, lr={}".format(
             e_idx, datetime.now() - epoch_start_time, losses['train'], losses['val'], scheduler.get_last_lr()))
 
+        save_checkpoint(net, optimizer, e_idx, losses, results_store_dir, min_val_loss == losses['val'])
         scheduler.step()
 
     print("Training Finished. Duration {}".format(datetime.now() - train_start_time))
@@ -164,4 +221,6 @@ if __name__ == "__main__":
     # Get the tiny Shakespeare DataSet
     # (https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt)
 
-    main()
+    # saved_model = "./results/GptModel__20231209_113956/training_checkpoints/model_3.pt"
+    saved_model = None
+    main(saved_model)
