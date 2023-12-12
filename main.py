@@ -162,6 +162,8 @@ def main(prev_saved_model_file=None):
 
     else:
         results_store_dir = os.path.dirname(prev_saved_model_file)
+        results_store_dir = results_store_dir.split('training_checkpoints')[0]
+
         checkpoint = torch.load(prev_saved_model_file)
         net.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -221,6 +223,6 @@ if __name__ == "__main__":
     # Get the tiny Shakespeare DataSet
     # (https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt)
 
-    # saved_model = "./results/GptModel__20231209_113956/training_checkpoints/model_3.pt"
-    saved_model = None
+    saved_model = "./results/GptModel__20231209_121845/training_checkpoints/model_5.pt"
+    # saved_model = None
     main(saved_model)
