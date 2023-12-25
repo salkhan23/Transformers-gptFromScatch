@@ -106,9 +106,9 @@ class AttentionHead(nn.Module):
             mask = self.tril[0:t, 0:t]
             s = s.masked_fill(mask == 0, float("-inf"))
 
-        a = F.softmax(s, dim=1)  # [B, head_dim, T] @ [B, T, T] = [B, head_dim, T]
-        # TODO: Better Performance and generated text if softmax over second dimension vs. last.
-        #  Both are T Why is one better than the other?
+        a = F.softmax(s, dim=-1)  # [B, head_dim, T] @ [B, T, T] = [B, head_dim, T]
+        # Note that the correct dimension to do softmax over is -1 (last). Even though
+        # the second last has the same dimensionality.
 
         a = self.dropout(a)
 
@@ -229,7 +229,7 @@ class DecoderBlock(nn.Module):
         return x
 
 
-class GptModel(nn.Module):
+class GptModelFromScratch(nn.Module):
     def __init__(self, vocab_s, embed_dim, block_s, n_attn_heads, n_layers=1, p_dropout=0.5):
         """
         Causal Self Attention (Decoder) Block
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     vocab_size = len(word_to_idx)
     block_size = 8  # context window length
 
-    model = GptModel(vocab_s=vocab_size, embed_dim=32, block_s=block_size, n_attn_heads=8)
+    model = GptModelFromScratch(vocab_s=vocab_size, embed_dim=32, block_s=block_size, n_attn_heads=8)
 
     input1 = torch.tensor([5, 1, 1, 0], dtype=torch.long)
     input1 = torch.unsqueeze(input1, dim=0)  # add the batch dimension
